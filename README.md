@@ -327,6 +327,40 @@ global-trash:
 
 正式长命令为 `/worldlisttrashcan`，简写为 `/wtc`。权限统一使用 `WorldListTrashCan.*`。
 
+### 玩家个人 BossBar 开关
+
+```text
+/wtc bossbar              切换自己的清理倒计时 BossBar
+/wtc bossbar on           开启个人显示
+/wtc bossbar off          关闭个人显示
+/wtc bossbar status       查看个人设置及全服总开关状态
+```
+
+权限 `WorldListTrashCan.BossBar` 默认向所有玩家开放；命令只能由玩家使用，支持 `toggle` 和 Tab 补全。
+个人设置默认开启，按 UUID 保存在 `plugins/WorldListTrashCan/data/bossbar-preferences.yml`，退出重进、`/wtc reload` 及服务器重启后仍保留。
+关闭立即移除自己的 BossBar，不影响其他玩家或聊天、ActionBar 等通知。开启时若倒计时正在显示则立即恢复，否则等下次配置的提醒时段显示。
+`cleanup.yml` 的 `notify.bossbar.enabled` 仍是全服总开关；关闭总开关时个人 `on` 只保存偏好，不会强制显示或创建常驻进度条。
+普通 Bukkit/Paper、Legacy、Folia 和 universal 产物使用同一份个人偏好逻辑。
+
+构建与验收（在仓库根目录，使用 JDK 17+ 和 Maven 3）：
+
+```bash
+mvn clean verify
+```
+
+将 `bl-world-trashcan-plugin-universal/target/bl-world-trashcan-plugin-universal-7.6.6.jar` 部署到测试服（排除 `original-` 前缀的未打包依赖 Jar），或选择对应平台的轻量 Jar。
+部署前停服并备份原插件 Jar 和 `plugins/WorldListTrashCan` 数据目录，替换后启动；同一服务器只保留一个版本的插件 Jar。
+测试服设 `notify.bossbar.enabled: true` 并执行 `/wtc reload`，管理员用 `/wtc debugnotify 10` 触发已有 10 秒提示（或等待自然倒计时，不需要执行清理命令）：
+
+1. 两位普通玩家在线，A 执行 `off` 后仅 A 隐藏；后续提示不得重新显示给 A，B 保持显示。
+2. A 执行 `on` 后恢复当前提示；重复 `on`/`off` 不应反转设置，空参数或 `toggle` 才切换。
+3. A 关闭后重新登录、重载及重启，`status` 均应保持关闭；使用相同 UUID 判断玩家身份。
+4. 总开关改为 `false` 并重载，执行 `on` 应提示总开关关闭，所有人均不显示；重新开启总开关后保留个人设置。
+5. 控制台执行 `wtc bossbar` 应提示仅玩家可用；非法参数应显示用法且不改变偏好。
+6. Folia 上重复上述步骤，检查日志中没有线程异常；结束后的通知不能通过 `on` 重新出现。
+
+回滚时停服恢复备份 Jar 再启动；个人偏好文件可以保留，旧版会忽略它。若需完整恢复数据，停服后再恢复备份目录。
+
 ### 可选清理审计附属
 
 `WorldListTrashCanAudit` 通过公开 API v3 接收扫地记录。主插件会为公共垃圾桶的每个运行期条目和个人垃圾桶的同源物品生成不透明追踪键，因此玩家各自的排序、翻页和展示模式不会改变实际领取追踪。世界垃圾桶与直接删除没有后续领取，只记录最终世界/坐标或删除去向。

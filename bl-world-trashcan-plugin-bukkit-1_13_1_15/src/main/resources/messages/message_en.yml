@@ -177,6 +177,11 @@ world-trash:
   remove-success: "{prefix}&#5AC8FARemoved this world trash can registration."
 # 主命令相关消息。
 command:
+  bossbar-enabled: "{prefix}&aYour cleanup countdown BossBar is enabled (shown during configured notifications)."
+  bossbar-disabled: "{prefix}&eYour cleanup countdown BossBar is disabled."
+  bossbar-global-disabled: "{prefix}&eThe server BossBar switch is off. Your preference is retained and will apply when it is enabled."
+  bossbar-save-failed: "{prefix}&cCould not save your BossBar preference; your previous setting is unchanged. Ask an administrator to check data directory permissions."
+  bossbar-usage: "{prefix}&eUsage: /wtc bossbar [on|off|toggle|status]"
   # 通用无权限提示。
   no-permission: "{prefix}&#FFD166You do not have permission to use this command."
   addon-failed: "{prefix}&#FF6B6BThe addon command failed &#64748B| &#C9D4E2Check the server log."
@@ -204,6 +209,7 @@ command:
     - "&#5AC8FA/wtc clear [true/false] &#64748B- Run cleanup; default true ignores guards, false obeys guards"
     - "&#5AC8FA/wtc global &#64748B- Open global trash"
     - "&#5AC8FA/wtc personal &#64748B- Open personal trash"
+    - "&#5AC8FA/wtc bossbar [on|off|toggle|status] &#64748B- Set your countdown visibility"
     - "&#5AC8FA/wtc dropmode &#64748B- Toggle drop protection"
     - "&#5AC8FA/wtc look &#64748B- Inspect held item and right-clicked entity type"
     - "&#5AC8FA/wtc ban &#64748B- Open this world's trash blacklist"

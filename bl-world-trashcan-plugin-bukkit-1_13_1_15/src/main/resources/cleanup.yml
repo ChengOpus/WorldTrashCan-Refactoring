@@ -248,7 +248,7 @@ notify:
 
   # BossBar 提醒。
   bossbar:
-    # 是否启用 BossBar。
+    # BossBar 总开关；开启后玩家可用 /wtc bossbar on/off 设置个人显示。
     enabled: false
     # 倒计时 BossBar 提醒，格式：剩余秒数;内容;样式;颜色。
     # 样式可用 SOLID、SEGMENTED_6、SEGMENTED_10、SEGMENTED_12、SEGMENTED_20；颜色可用 PINK、BLUE、RED、GREEN、YELLOW、PURPLE、WHITE。

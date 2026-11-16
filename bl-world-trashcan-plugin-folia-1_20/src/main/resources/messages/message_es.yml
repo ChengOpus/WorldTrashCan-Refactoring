@@ -177,6 +177,11 @@ world-trash:
   remove-success: "{prefix}&#5AC8FARegistro de papelera de mundo eliminado."
 # 主命令相关消息。
 command:
+  bossbar-enabled: "{prefix}&aTu BossBar de cuenta atrás está activada (se muestra durante los avisos configurados)."
+  bossbar-disabled: "{prefix}&eTu BossBar de cuenta atrás está desactivada."
+  bossbar-global-disabled: "{prefix}&eEl servidor ha desactivado la BossBar. Tu preferencia se conserva y se aplicará cuando vuelva a activarse."
+  bossbar-save-failed: "{prefix}&cNo se pudo guardar tu preferencia de BossBar; la anterior no ha cambiado. Pide al administrador que revise los permisos del directorio de datos."
+  bossbar-usage: "{prefix}&eUso: /wtc bossbar [on|off|toggle|status]"
   # 通用无权限提示。
   no-permission: "{prefix}&#FFD166No tienes permiso para usar este comando."
   addon-failed: "{prefix}&#FF6B6BEl comando del complemento fallo &#64748B| &#C9D4E2Revisa el registro del servidor."
@@ -204,6 +209,7 @@ command:
     - "&#5AC8FA/wtc clear [true/false] &#64748B- Ejecutar limpieza; true ignora guards, false los respeta"
     - "&#5AC8FA/wtc global &#64748B- Abrir papelera global"
     - "&#5AC8FA/wtc personal &#64748B- Abrir papelera personal"
+    - "&#5AC8FA/wtc bossbar [on|off|toggle|status] &#64748B- Configurar tu cuenta atrás"
     - "&#5AC8FA/wtc dropmode &#64748B- Alternar proteccion de soltar"
     - "&#5AC8FA/wtc look &#64748B- Inspeccionar item en mano y entidad clicada"
     - "&#5AC8FA/wtc ban &#64748B- Abrir blacklist de papeleras del mundo"
