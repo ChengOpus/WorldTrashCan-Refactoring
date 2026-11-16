@@ -443,7 +443,8 @@ public final class ConfigBundleLoader {
                 cleanup.getBoolean("notify.title.enabled", false),
                 parseTitleMessages(cleanup.getStringList("notify.title.messages")),
                 cleanup.getBoolean("notify.sound.enabled", true),
-                parseSoundMessages(cleanup.getStringList("notify.sound.messages"))
+                parseSoundMessages(cleanup.getStringList("notify.sound.messages")),
+                cleanup.getBoolean("notify.bossbar.default-enabled", false)
         );
     }
 

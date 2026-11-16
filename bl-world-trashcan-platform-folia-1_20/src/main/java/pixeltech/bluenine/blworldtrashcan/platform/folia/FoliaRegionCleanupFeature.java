@@ -139,7 +139,8 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
         if (bossBarPreferences == null) {
             bossBarPreferences = new BossBarPreferenceService(
                     new File(plugin.getDataFolder(), "data/bossbar-preferences.yml"),
-                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled());
+                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled(),
+                    () -> configSupplier.get().getNotifyConfig().isBossBarDefaultEnabled());
         }
         return bossBarPreferences;
     }

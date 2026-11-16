@@ -1,6 +1,7 @@
 package pixeltech.bluenine.blworldtrashcan.bukkit.notify;
 
 import org.bukkit.boss.BossBar;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -17,8 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -26,19 +27,37 @@ import java.util.function.BooleanSupplier;
 public final class BossBarPreferenceService implements Listener {
     private final File file;
     private final BooleanSupplier globallyEnabled;
-    private final Set<UUID> hiddenPlayers = new HashSet<>();
+    private final BooleanSupplier defaultEnabled;
+    private final Map<UUID, Boolean> playerPreferences = new HashMap<>();
     private BossBar activeBar;
     private boolean registered;
 
     public BossBarPreferenceService(File file, BooleanSupplier globallyEnabled) {
+        this(file, globallyEnabled, () -> false);
+    }
+
+    public BossBarPreferenceService(File file, BooleanSupplier globallyEnabled, BooleanSupplier defaultEnabled) {
         this.file = file;
         this.globallyEnabled = globallyEnabled;
+        this.defaultEnabled = defaultEnabled;
         if (file.exists()) {
             YamlConfiguration data = new YamlConfiguration();
             try {
                 data.load(file);
                 for (String id : data.getStringList("hidden-players")) {
-                    hiddenPlayers.add(UUID.fromString(id));
+                    playerPreferences.put(UUID.fromString(id), false);
+                }
+                if (data.contains("players")) {
+                    ConfigurationSection players = data.getConfigurationSection("players");
+                    if (players == null) {
+                        throw new IOException("players must be a UUID-to-boolean mapping");
+                    }
+                    for (String id : players.getKeys(false)) {
+                        if (!players.isBoolean(id)) {
+                            throw new IOException("Invalid BossBar preference for " + id);
+                        }
+                        playerPreferences.put(UUID.fromString(id), players.getBoolean(id));
+                    }
                 }
             } catch (Exception exception) {
                 throw new IllegalStateException("Cannot load BossBar preferences: " + file, exception);
@@ -55,7 +74,8 @@ public final class BossBarPreferenceService implements Listener {
     }
 
     public synchronized boolean isEnabled(UUID playerId) {
-        return !hiddenPlayers.contains(playerId);
+        Boolean preference = playerPreferences.get(playerId);
+        return preference == null ? defaultEnabled.getAsBoolean() : preference.booleanValue();
     }
 
     public boolean isGloballyEnabled() {
@@ -64,28 +84,33 @@ public final class BossBarPreferenceService implements Listener {
 
     /** 先安全落盘，再改变内存及画面；失败时保留原设置。 */
     public synchronized void setEnabled(Player player, boolean enabled) throws IOException {
-        Set<UUID> updated = new HashSet<>(hiddenPlayers);
-        if (enabled) {
-            updated.remove(player.getUniqueId());
-        } else {
-            updated.add(player.getUniqueId());
-        }
-        if (!updated.equals(hiddenPlayers)) {
+        Map<UUID, Boolean> updated = new HashMap<>(playerPreferences);
+        updated.put(player.getUniqueId(), enabled);
+        if (!updated.equals(playerPreferences)) {
             save(updated);
-            hiddenPlayers.clear();
-            hiddenPlayers.addAll(updated);
+            playerPreferences.clear();
+            playerPreferences.putAll(updated);
         }
         refreshPlayer(player);
     }
 
-    private void save(Set<UUID> hidden) throws IOException {
+    private void save(Map<UUID, Boolean> preferences) throws IOException {
         YamlConfiguration data = new YamlConfiguration();
         ArrayList<String> ids = new ArrayList<>();
-        for (UUID id : hidden) {
+        for (UUID id : preferences.keySet()) {
             ids.add(id.toString());
         }
         java.util.Collections.sort(ids);
-        data.set("hidden-players", ids);
+        ArrayList<String> hidden = new ArrayList<>();
+        for (String id : ids) {
+            boolean enabled = preferences.get(UUID.fromString(id));
+            data.set("players." + id, enabled);
+            if (!enabled) {
+                hidden.add(id);
+            }
+        }
+        // 保留旧版关闭名单，便于回滚；新版明确记录 on/off，不受默认值变化影响。
+        data.set("hidden-players", hidden);
         Path target = file.toPath().toAbsolutePath();
         Files.createDirectories(target.getParent());
         Path temporary = Files.createTempFile(target.getParent(), "bossbar-", ".tmp");

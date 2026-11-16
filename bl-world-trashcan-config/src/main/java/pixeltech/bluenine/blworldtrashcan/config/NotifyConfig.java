@@ -13,6 +13,7 @@ public final class NotifyConfig {
     private final boolean actionBarEnabled;
     private final Map<Integer, String> actionBarMessages;
     private final boolean bossBarEnabled;
+    private final boolean bossBarDefaultEnabled;
     private final Map<Integer, BossBarMessage> bossBarMessages;
     private final boolean commandEnabled;
     private final Map<Integer, List<String>> commandMessages;
@@ -30,6 +31,20 @@ public final class NotifyConfig {
                         Map<Integer, List<String>> commandMessages, boolean titleEnabled,
                         Map<Integer, TitleMessage> titleMessages, boolean soundEnabled,
                         Map<Integer, SoundMessage> soundMessages) {
+        this(chatEnabled, chatClickCommand, chatMessages, console, actionBarEnabled, actionBarMessages,
+                bossBarEnabled, bossBarMessages, commandEnabled, commandMessages, titleEnabled,
+                titleMessages, soundEnabled, soundMessages, false);
+    }
+
+    /** 创建包含玩家 BossBar 默认显示设置的通知配置。 */
+    public NotifyConfig(boolean chatEnabled, String chatClickCommand,
+                        Map<Integer, String> chatMessages, ConsoleConfig console,
+                        boolean actionBarEnabled,
+                        Map<Integer, String> actionBarMessages, boolean bossBarEnabled,
+                        Map<Integer, BossBarMessage> bossBarMessages, boolean commandEnabled,
+                        Map<Integer, List<String>> commandMessages, boolean titleEnabled,
+                        Map<Integer, TitleMessage> titleMessages, boolean soundEnabled,
+                        Map<Integer, SoundMessage> soundMessages, boolean bossBarDefaultEnabled) {
         this.chatEnabled = chatEnabled;
         this.chatClickCommand = chatClickCommand == null ? "" : chatClickCommand;
         this.chatMessages = safeMap(chatMessages);
@@ -37,6 +52,7 @@ public final class NotifyConfig {
         this.actionBarEnabled = actionBarEnabled;
         this.actionBarMessages = safeMap(actionBarMessages);
         this.bossBarEnabled = bossBarEnabled;
+        this.bossBarDefaultEnabled = bossBarDefaultEnabled;
         this.bossBarMessages = safeMap(bossBarMessages);
         this.commandEnabled = commandEnabled;
         this.commandMessages = safeMap(commandMessages);
@@ -79,6 +95,11 @@ public final class NotifyConfig {
     /** 判断 BossBar 通知是否启用。 */
     public boolean isBossBarEnabled() {
         return bossBarEnabled;
+    }
+
+    /** 返回尚未设置个人偏好的玩家是否默认显示 BossBar。 */
+    public boolean isBossBarDefaultEnabled() {
+        return bossBarDefaultEnabled;
     }
 
     /** 返回 BossBar 通知映射。 */

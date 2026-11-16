@@ -32,18 +32,18 @@ public class BossBarPreferenceServiceTest {
     public TemporaryFolder temporary = new TemporaryFolder();
 
     @Test
-    public void defaultEnabledAndPreferencesSurviveRestartByUuid() throws Exception {
+    public void configuredDefaultEnabledAndPreferencesSurviveRestartByUuid() throws Exception {
         File file = new File(temporary.getRoot(), "data/preferences.yml");
-        BossBarPreferenceService service = new BossBarPreferenceService(file, () -> true);
+        BossBarPreferenceService service = new BossBarPreferenceService(file, () -> true, () -> true);
         Player first = player(UUID.randomUUID(), true, new ArrayList<>());
         Player second = player(UUID.randomUUID(), true, new ArrayList<>());
         assertTrue(service.isEnabled(first.getUniqueId()));
         service.setEnabled(first, false);
-        BossBarPreferenceService restarted = new BossBarPreferenceService(file, () -> true);
+        BossBarPreferenceService restarted = new BossBarPreferenceService(file, () -> true, () -> true);
         assertFalse(restarted.isEnabled(first.getUniqueId()));
         assertTrue(restarted.isEnabled(second.getUniqueId()));
         restarted.setEnabled(player(first.getUniqueId(), true, new ArrayList<>()), true);
-        assertTrue(new BossBarPreferenceService(file, () -> true).isEnabled(first.getUniqueId()));
+        assertTrue(new BossBarPreferenceService(file, () -> true, () -> true).isEnabled(first.getUniqueId()));
     }
 
     @Test
@@ -123,7 +123,7 @@ public class BossBarPreferenceServiceTest {
     @Test
     public void failedSavePreservesPreviousPreferenceAndDisplay() throws Exception {
         File notDirectory = temporary.newFile("not-a-directory");
-        BossBarPreferenceService service = new BossBarPreferenceService(new File(notDirectory, "prefs.yml"), () -> true);
+        BossBarPreferenceService service = new BossBarPreferenceService(new File(notDirectory, "prefs.yml"), () -> true, () -> true);
         Set<Player> viewers = new HashSet<>();
         Player player = player();
         service.activate(bar(viewers));
@@ -143,7 +143,7 @@ public class BossBarPreferenceServiceTest {
         byte[] contents = "hidden-players: [unterminated".getBytes(StandardCharsets.UTF_8);
         Files.write(file.toPath(), contents);
         try {
-            new BossBarPreferenceService(file, () -> true);
+            new BossBarPreferenceService(file, () -> true, () -> true);
             fail("Invalid YAML should fail visibly");
         } catch (IllegalStateException expected) {
             assertArrayEquals(contents, Files.readAllBytes(file.toPath()));
@@ -207,7 +207,7 @@ public class BossBarPreferenceServiceTest {
     }
 
     private BossBarPreferenceService service(java.util.function.BooleanSupplier global) throws IOException {
-        return new BossBarPreferenceService(new File(temporary.newFolder(), "preferences.yml"), global);
+        return new BossBarPreferenceService(new File(temporary.newFolder(), "preferences.yml"), global, () -> true);
     }
 
     @Test

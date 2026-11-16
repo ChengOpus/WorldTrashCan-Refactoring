@@ -116,7 +116,8 @@ public final class CleanupFeature implements PlayerBossBarFeature {
         if (bossBarPreferences == null) {
             bossBarPreferences = new BossBarPreferenceService(
                     new File(plugin.getDataFolder(), "data/bossbar-preferences.yml"),
-                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled());
+                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled(),
+                    () -> configSupplier.get().getNotifyConfig().isBossBarDefaultEnabled());
         }
         return bossBarPreferences;
     }
