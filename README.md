@@ -197,7 +197,7 @@ items:
 - 扫地把物品写入任意垃圾桶前后都会轻量核对掉落实体、材质和数量；若玩家恰好完成拾取、实体删除失败或数量已变化，本次垃圾桶写入会按追踪键回滚，避免背包与垃圾桶同时获得同一份物品。
 - 旧版配置会被识别并隔离到 `old-version-config`，不直接拿旧配置启动新版逻辑。
 - 默认配置缺失项会补回，并且默认配置项带有中文注释。
-- bStats 已内置，服主不需要额外开关；插件版本为 `7.6.6-bossbar.2`。
+- bStats 已内置，服主不需要额外开关；插件版本为 `7.6.6-bossbar.3`。
 
 ### 性能优化估算
 
@@ -327,54 +327,43 @@ global-trash:
 
 正式长命令为 `/worldlisttrashcan`，简写为 `/wtc`。权限统一使用 `WorldListTrashCan.*`。
 
-### 玩家个人 BossBar 开关
+### 玩家个人常驻倒计时 BossBar
 
-本定制版基于上游 7.6.6，保留该版本的功能和修复，新增玩家个人显示开关。版本标识为 `7.6.6-bossbar.2`，可通过 `/version WorldListTrashCan` 确认安装结果。
+本定制版基于上游 7.6.6，版本标识为 `7.6.6-bossbar.3`。BossBar 与实际定时清理共用同一个计时器，常驻显示 `距离下次清理还有 10:00 → 09:59 → … → 00:01`，进度条同步递减。
+到期运行原有清理任务；清理期间显示“正在清理物品和实体……”，完成后重置完整周期并继续循环。Folia 在实际异步清理收尾后才重置；管理员手动清理结束也重置周期。原有世界过滤、物品保护和清理门禁继续有效，门禁跳过或清理超时收尾后也会开始下一轮周期。
 
-```text
-/wtc bossbar              切换自己的清理倒计时 BossBar
-/wtc bossbar on           开启个人显示
-/wtc bossbar off          关闭个人显示
-/wtc bossbar status       查看个人设置及全服总开关状态
-```
-
-权限 `WorldListTrashCan.BossBar` 默认向所有玩家开放；命令只能由玩家使用，支持 `toggle` 和 Tab 补全。
-未设置过个人偏好的玩家默认关闭显示；玩家明确选择的 on/off 按 UUID 保存在 `plugins/WorldListTrashCan/data/bossbar-preferences.yml`，退出重进、`/wtc reload` 及服务器重启后仍保留。
-关闭立即移除自己的 BossBar，不影响其他玩家或聊天、ActionBar 等通知。开启时若倒计时正在显示则立即恢复，否则等下次配置的提醒时段显示。
-`cleanup.yml` 的 `notify.bossbar.enabled` 仍是全服总开关；关闭总开关时个人 `on` 只保存偏好，不会强制显示或创建常驻进度条。
-普通 Bukkit/Paper、Legacy、Folia 和 universal 产物使用同一份个人偏好逻辑。
-
-在已有 `cleanup.yml` 的 `notify.bossbar` 中设置（保留原 `messages`，不要重复添加 `notify` 节点）：
+在已有 `plugins/WorldListTrashCan/cleanup.yml` 中修改相应节点，不要覆盖其他配置或重复添加 `notify`：
 
 ```yaml
+interval-seconds: 600
 notify:
   bossbar:
     enabled: true
     default-enabled: false
+    countdown-title: "&b距离下次清理还有 &e{time}"
+    cleaning-title: "&e正在清理物品和实体……"
 ```
 
-替换 Jar 后需要正常重启；之后只修改配置可使用 `/wtc reload`。`default-enabled` 只影响没有个人记录的玩家，缺省为 `false`；明确选择过 `on`/`off` 的玩家仍沿用自己的选择。
-旧 `bossbar.1` 只保存关闭名单，无法识别之前谁执行过 `on`；这些玩家升级后需要重新执行一次 `/wtc bossbar on`。旧关闭名单自动兼容，新版同时保存开、关两种状态。
+新安装的默认清理周期为 600 秒；已有文件保留原配置，因此需要将已有 `interval-seconds` 改成 `600` 才是十分钟。设为 `0` 会同时停止定时清理和常驻条。
+`{time}` 为 MM:SS，`{seconds}` 为剩余秒数，`{interval}` 为周期秒数。旧 `notify.bossbar.messages` 可以保留，但不再控制常驻条；聊天、ActionBar、声音等通知仍沿用原配置。`/wtc debugnotify` 只测试通知，不改变真实计时器或重置倒计时。
 
-
-构建与验收（在仓库根目录，使用 JDK 17+ 和 Maven 3）：
-
-```bash
-mvn clean verify
+```text
+/wtc bossbar              切换个人显示
+/wtc bossbar on           立即显示当前常驻倒计时
+/wtc bossbar off          立即隐藏
+/wtc bossbar status       查看个人设置及全服总开关状态
 ```
 
-将 `bl-world-trashcan-plugin-universal/target/bl-world-trashcan-plugin-universal-7.6.6-bossbar.2.jar` 部署到测试服（排除 `original-` 前缀的未打包依赖 Jar），或选择对应平台的轻量 Jar。
-部署前停服并备份原插件 Jar 和 `plugins/WorldListTrashCan` 数据目录，替换后启动；同一服务器只保留一个版本的插件 Jar。
-测试服设 `notify.bossbar.enabled: true` 并执行 `/wtc reload`，管理员用 `/wtc debugnotify 10` 触发已有 10 秒提示（或等待自然倒计时，不需要执行清理命令）：
+权限 `WorldListTrashCan.BossBar` 默认向所有玩家开放。未设置个人偏好的玩家默认不显示；明确选择的开关按 UUID 保存在 `data/bossbar-preferences.yml`，重连、重载及重启后保留。总开关关闭时任何玩家均不显示。
+`bossbar.2` 的个人记录直接兼容；`bossbar.1` 只保存关闭名单，之前开启过的玩家首次升级到新版后需要重新执行一次 `on`。
 
-1. 两位未设置过偏好的普通玩家在线，默认都不显示；A 执行 `on` 后仅 A 显示，B 保持隐藏。A 执行 `off` 后立即隐藏，后续提醒也不应重新显示。
-2. A 执行 `on` 后恢复当前提示；重复 `on`/`off` 不应反转设置，空参数或 `toggle` 才切换。
-3. A 关闭后重新登录、重载及重启，`status` 均应保持关闭；使用相同 UUID 判断玩家身份。
-4. 总开关改为 `false` 并重载，执行 `on` 应提示总开关关闭，所有人均不显示；重新开启总开关后保留个人设置。
-5. 控制台执行 `wtc bossbar` 应提示仅玩家可用；非法参数应显示用法且不改变偏好。
-6. Folia 上重复上述步骤，检查日志中没有线程异常；结束后的通知不能通过 `on` 重新出现。
+停服备份原 Jar 及插件数据目录，替换为 `bl-world-trashcan-plugin-universal/target/bl-world-trashcan-plugin-universal-7.6.6-bossbar.3.jar`，同一服务器只保留一个插件 Jar，然后正常启动。之后仅修改配置时可执行 `/wtc reload`；重载会从完整周期重新计时。
 
-回滚时停服恢复备份 Jar 再启动；原版会忽略个人偏好文件，`bossbar.1` 会读取其中保留的关闭名单，并恢复其默认开启行为。若需完整恢复数据，停服后再恢复备份目录。
+安装后可使用 `/version WorldListTrashCan` 确认版本；开启个人显示后观察数字每秒递减，清理完成后应重置为 10:00。另一位未开启的玩家应保持不显示。
+Minecraft 客户端的 BossBar 显示区域有限；已有多条监控 Bar 时可能需关闭其中一条或减小 GUI 缩放。
+本次按需求仅编译打包，未运行测试套件或真实 Lophine 联机测试。
+
+回滚时停服恢复备份 Jar；如果需要同时恢复配置，恢复部署前备份的数据目录。旧 `bossbar.1` 会恢复默认显示行为，原版会忽略个人偏好文件。
 
 ### 可选清理审计附属
 
@@ -390,7 +379,7 @@ API v3 是破坏式更新，不兼容尚未发布的旧 Audit API/Jar。安装 A
 
 ### 当前通用整包
 
-- 版本：`7.6.6-bossbar.2`
+- 版本：`7.6.6-bossbar.3`
 - 文件：`WorldListTrashCan-universal.jar`
 - 文件大小：`1006859` 字节
 - SHA-256：`03230FE1AF820E9081FD6F990773DD98690353547DB5F50AAEA3BCE663B75FFC`
@@ -589,7 +578,7 @@ Scheduled cleanup and `/wtc clear` messages in newly generated language files us
 - Player-drop ownership is stored on the dropped entity rather than inside the item stack, so normal item stacking is not affected.
 - Cleanup lightly rechecks the dropped entity, material, and amount around every trash destination write. If a player wins the pickup, entity removal fails, or the amount changes, the destination write is rolled back by its tracking key so the inventory and trash cannot both receive the same item.
 - Legacy configurations are detected and isolated in `old-version-config` instead of being used directly by the new implementation.
-- bStats is built in and has no plugin-level enable/disable switch; the plugin version is `7.6.6-bossbar.2`.
+- bStats is built in and has no plugin-level enable/disable switch; the plugin version is `7.6.6-bossbar.3`.
 
 ### Estimated performance improvements
 
@@ -733,7 +722,7 @@ API v3 is a breaking update and does not retain compatibility with the unpublish
 
 Final universal artifact information:
 
-- Version: `7.6.6-bossbar.2`
+- Version: `7.6.6-bossbar.3`
 - File: `WorldListTrashCan-universal.jar`
 - File size: `1006859` bytes
 - SHA-256: `03230FE1AF820E9081FD6F990773DD98690353547DB5F50AAEA3BCE663B75FFC`

@@ -136,7 +136,7 @@ public final class ConfigBundleLoader {
                 )
         );
         CleanupConfig cleanupConfig = new CleanupConfig(
-                cleanup.getInt("interval-seconds", 360),
+                cleanup.getInt("interval-seconds", 600),
                 parseCleanupWorldFilter(cleanup),
                 toSet(cleanup.getStringList("direct-remove-worlds")),
                 cleanupSettings,
@@ -444,7 +444,9 @@ public final class ConfigBundleLoader {
                 parseTitleMessages(cleanup.getStringList("notify.title.messages")),
                 cleanup.getBoolean("notify.sound.enabled", true),
                 parseSoundMessages(cleanup.getStringList("notify.sound.messages")),
-                cleanup.getBoolean("notify.bossbar.default-enabled", false)
+                cleanup.getBoolean("notify.bossbar.default-enabled", false),
+                cleanup.getString("notify.bossbar.countdown-title", "&b距离下次清理还有 &e{time}"),
+                cleanup.getString("notify.bossbar.cleaning-title", "&e正在清理物品和实体……")
         );
     }
 

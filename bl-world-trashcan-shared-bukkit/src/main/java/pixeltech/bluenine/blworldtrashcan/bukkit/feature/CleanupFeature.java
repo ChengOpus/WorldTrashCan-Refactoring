@@ -13,6 +13,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 import pixeltech.bluenine.blworldtrashcan.bukkit.notify.BossBarPreferenceService;
+import pixeltech.bluenine.blworldtrashcan.bukkit.notify.CountdownBossBarRenderer;
 import pixeltech.bluenine.blworldtrashcan.bukkit.message.RichTextRenderer;
 import pixeltech.bluenine.blworldtrashcan.bukkit.logging.DebugOutput;
 import pixeltech.bluenine.blworldtrashcan.bukkit.api.DefaultWorldListTrashCanAuditBridge;
@@ -75,13 +76,11 @@ public final class CleanupFeature implements PlayerBossBarFeature {
     private DebugOutput debugOutput = DebugOutput.disabled();
     private volatile ItemQuantityService itemQuantityService;
     private TaskHandle taskHandle;
-    private TaskHandle bossBarRemoveTask;
     private BossBar bossBar;
     private BossBarPreferenceService bossBarPreferences;
     private CleanupStats lastStats = CleanupStats.empty();
-    private long nextRunAtMillis;
     private int cleanupRunsSinceGlobalClear;
-    private int countdownSeconds;
+    private volatile int countdownSeconds;
 
     /** 创建后台清理功能。 */
     public CleanupFeature(Plugin plugin, ServerPlatform platform, Supplier<ConfigBundle> configSupplier,
@@ -149,7 +148,6 @@ public final class CleanupFeature implements PlayerBossBarFeature {
             taskHandle.cancel();
             taskHandle = null;
         }
-        cancelBossBarRemoval();
         removeBossBar();
         countdownSeconds = 0;
     }
@@ -161,7 +159,12 @@ public final class CleanupFeature implements PlayerBossBarFeature {
 
     /** 立即执行一次清理，可由命令入口决定是否忽略 guards。 */
     public CleanupStats runNow(boolean ignoreGuards) {
-        return runNow(ignoreGuards, CleanupTrigger.MANUAL);
+        updateCountdownBossBar(true);
+        try {
+            return runNow(ignoreGuards, CleanupTrigger.MANUAL);
+        } finally {
+            resetCountdown();
+        }
     }
 
     /** 执行一次带明确触发来源的清理。 */
@@ -255,10 +258,7 @@ public final class CleanupFeature implements PlayerBossBarFeature {
 
     /** 返回距离下次自动清理的秒数。 */
     public long getRemainingSeconds() {
-        if (nextRunAtMillis <= 0L) {
-            return 0L;
-        }
-        return Math.max(0L, (nextRunAtMillis - System.currentTimeMillis()) / 1000L);
+        return Math.max(0, countdownSeconds);
     }
 
     /** 判断当前平台是否允许同步扫描世界实体。 */
@@ -276,13 +276,10 @@ public final class CleanupFeature implements PlayerBossBarFeature {
             return;
         }
         if (!isWorldScanSupported()) {
-            nextRunAtMillis = 0L;
             plugin.getLogger().warning("[Cleanup] 当前 Folia 产物尚未启用 region-safe 清理，定时世界扫描已关闭。");
             return;
         }
-        long ticks = Math.max(20L, interval * 20L);
         countdownSeconds = interval;
-        nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
         taskHandle = platform.scheduler().runRepeating(new Runnable() {
             /** 执行倒计时或定时清理。 */
             @Override
@@ -290,6 +287,7 @@ public final class CleanupFeature implements PlayerBossBarFeature {
                 tickCountdown();
             }
         }, 20L, 20L);
+        updateCountdownBossBar(false);
         plugin.getLogger().info("[Cleanup] 定时清理已启动，间隔 " + interval + " 秒。");
     }
 
@@ -338,21 +336,26 @@ public final class CleanupFeature implements PlayerBossBarFeature {
     private void tickCountdown() {
         int interval = configSupplier.get().getCleanupConfig().getIntervalSeconds();
         if (interval <= 0) {
+            countdownSeconds = 0;
+            removeBossBar();
             return;
         }
-        if (countdownSeconds <= 0) {
-            CleanupStats stats = runNow();
-            if (!stats.isGuardSkipped()) {
-                sendNotify(0, stats);
-                sendNotify(globalTrashStatusNotifyCount(stats), stats);
+        countdownSeconds = Math.max(0, countdownSeconds - 1);
+        if (countdownSeconds == 0) {
+            updateCountdownBossBar(true);
+            try {
+                CleanupStats stats = runNow();
+                if (!stats.isGuardSkipped()) {
+                    sendNotify(0, stats);
+                    sendNotify(globalTrashStatusNotifyCount(stats), stats);
+                }
+            } finally {
+                resetCountdown();
             }
-            countdownSeconds = interval;
-            nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
             return;
         }
+        updateCountdownBossBar(false);
         sendNotify(countdownSeconds, CleanupStats.empty());
-        countdownSeconds--;
-        nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
     }
 
     /** 清理单个世界。 */
@@ -806,7 +809,6 @@ public final class CleanupFeature implements PlayerBossBarFeature {
         sendChatNotify(notifyConfig, count, stats);
         sendConsoleNotify(notifyConfig, count, stats);
         sendActionBarNotify(notifyConfig, count, stats);
-        sendBossBarNotify(notifyConfig, count, stats);
         sendTitleNotify(notifyConfig, count, stats);
         sendSoundNotify(notifyConfig, count);
         runCommandNotify(notifyConfig, count, stats);
@@ -861,34 +863,30 @@ public final class CleanupFeature implements PlayerBossBarFeature {
         }
     }
 
-    /** 发送 BossBar 通知。 */
-    private void sendBossBarNotify(NotifyConfig notifyConfig, int count, CleanupStats stats) {
-        if (!notifyConfig.isBossBarEnabled()) {
-            cancelBossBarRemoval();
+    /** 每秒用真实清理计时器刷新常驻 BossBar。 */
+    private void updateCountdownBossBar(boolean cleaning) {
+        ConfigBundle bundle = configSupplier.get();
+        int interval = bundle.getCleanupConfig().getIntervalSeconds();
+        if (taskHandle == null || interval <= 0 || !bundle.getNotifyConfig().isBossBarEnabled()) {
             removeBossBar();
             return;
         }
-        NotifyConfig.BossBarMessage message = notifyConfig.getBossBarMessages().get(count);
-        if (message == null) {
-            if (count <= 0) {
-                scheduleBossBarRemoval();
-            }
-            return;
+        final BossBar current = bossBar();
+        BossBarPreferenceService preferences = bossBarPreferences();
+        synchronized (preferences) {
+            CountdownBossBarRenderer.update(current, bundle.getNotifyConfig(), countdownSeconds, interval, cleaning);
+            preferences.activate(current);
         }
-        BossBar current = bossBar();
-        current.setTitle(RichTextRenderer.color(applyStats(message.getText(), stats)));
-        current.setStyle(parseBossBarStyle(message.getStyle()));
-        current.setColor(parseBossBarColor(message.getColor()));
-        current.setProgress(bossBarProgress(count, notifyConfig));
-        bossBarPreferences().activate(current);
         for (Player player : Bukkit.getOnlinePlayers()) {
             bossBarPreferences().refreshPlayer(current, player);
         }
-        if (count <= 0) {
-            scheduleBossBarRemoval();
-        } else {
-            cancelBossBarRemoval();
-        }
+    }
+
+    /** 本轮清理结束（含门禁跳过）后开始下一轮完整周期。 */
+    private void resetCountdown() {
+        countdownSeconds = taskHandle == null ? 0
+                : Math.max(0, configSupplier.get().getCleanupConfig().getIntervalSeconds());
+        updateCountdownBossBar(false);
     }
 
     /** 发送 Title 通知。 */
@@ -939,59 +937,6 @@ public final class CleanupFeature implements PlayerBossBarFeature {
         return bossBar;
     }
 
-    /** 计算 BossBar 进度。 */
-    private double bossBarProgress(int count, NotifyConfig notifyConfig) {
-        int max = 0;
-        for (Integer key : notifyConfig.getBossBarMessages().keySet()) {
-            if (key != null && key > max) {
-                max = key;
-            }
-        }
-        if (count <= 0 || max <= 0) {
-            return 1D;
-        }
-        return Math.max(0D, Math.min(1D, count / (double) max));
-    }
-
-    /** 解析 BossBar 颜色，配置错误时使用绿色。 */
-    private BarColor parseBossBarColor(String value) {
-        try {
-            return BarColor.valueOf((value == null ? "" : value.trim()).toUpperCase(Locale.ROOT));
-        } catch (RuntimeException ignored) {
-            return BarColor.GREEN;
-        }
-    }
-
-    /** 解析 BossBar 样式，配置错误时使用实心样式。 */
-    private BarStyle parseBossBarStyle(String value) {
-        try {
-            return BarStyle.valueOf((value == null ? "" : value.trim()).toUpperCase(Locale.ROOT));
-        } catch (RuntimeException ignored) {
-            return BarStyle.SOLID;
-        }
-    }
-
-    /** 延迟移除完成后的 BossBar。 */
-    private void scheduleBossBarRemoval() {
-        cancelBossBarRemoval();
-        bossBarRemoveTask = platform.scheduler().runLater(new Runnable() {
-            /** 执行 BossBar 延迟移除。 */
-            @Override
-            public void run() {
-                removeBossBar();
-                bossBarRemoveTask = null;
-            }
-        }, 90L);
-    }
-
-    /** 取消等待中的 BossBar 移除任务。 */
-    private void cancelBossBarRemoval() {
-        if (bossBarRemoveTask != null) {
-            bossBarRemoveTask.cancel();
-            bossBarRemoveTask = null;
-        }
-    }
-
     /** 从所有玩家屏幕移除 BossBar。 */
     private void removeBossBar() {
         if (bossBarPreferences != null) {
@@ -999,6 +944,7 @@ public final class CleanupFeature implements PlayerBossBarFeature {
         }
         if (bossBar != null) {
             bossBar.removeAll();
+            bossBar = null;
         }
     }
 

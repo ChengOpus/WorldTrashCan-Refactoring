@@ -28,6 +28,7 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 import pixeltech.bluenine.blworldtrashcan.bukkit.notify.BossBarPreferenceService;
+import pixeltech.bluenine.blworldtrashcan.bukkit.notify.CountdownBossBarRenderer;
 import pixeltech.bluenine.blworldtrashcan.bukkit.feature.PlayerBossBarFeature;
 import pixeltech.bluenine.blworldtrashcan.bukkit.feature.CleanupConsoleDetailFormatter;
 import pixeltech.bluenine.blworldtrashcan.bukkit.api.DefaultWorldListTrashCanAuditBridge;
@@ -98,12 +99,10 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
     private final Set<UUID> pendingWorldTrashItems = ConcurrentHashMap.newKeySet();
     private boolean listenerRegistered;
     private TaskHandle taskHandle;
-    private TaskHandle bossBarRemoveTask;
     private BossBar bossBar;
     private BossBarPreferenceService bossBarPreferences;
     private volatile CleanupFeature.CleanupStats lastStats = CleanupFeature.CleanupStats.empty();
-    private long nextRunAtMillis;
-    private int countdownSeconds;
+    private volatile int countdownSeconds;
     private int cleanupRunsSinceGlobalClear;
 
     /** 创建 Folia region-safe 清理功能。 */
@@ -176,9 +175,7 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
             taskHandle.cancel();
             taskHandle = null;
         }
-        cancelBossBarRemoval();
         removeBossBar();
-        nextRunAtMillis = 0L;
         countdownSeconds = 0;
     }
 
@@ -248,6 +245,8 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
                 @Override
                 public void run() {
                     try {
+                        countdownSeconds = 0;
+                        updateCountdownBossBar(true);
                         scheduleWorldScans(stats, ignoreGuards, trigger);
                     } catch (RuntimeException exception) {
                         plugin.getLogger().warning("[FoliaCleanup] 分派 region-safe 清理失败: " + exception.getMessage());
@@ -323,10 +322,7 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
 
     /** 返回下次自动清理剩余秒数。 */
     public long getRemainingSeconds() {
-        if (nextRunAtMillis <= 0L) {
-            return 0L;
-        }
-        return Math.max(0L, (nextRunAtMillis - System.currentTimeMillis()) / 1000L);
+        return Math.max(0, countdownSeconds);
     }
 
     /** 按配置启动每秒倒计时任务。 */
@@ -339,7 +335,6 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
             return;
         }
         countdownSeconds = interval;
-        nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
         taskHandle = platform.scheduler().runRepeating(new Runnable() {
             /** 推进倒计时。 */
             @Override
@@ -347,6 +342,7 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
                 tickCountdown();
             }
         }, 20L, 20L);
+        updateCountdownBossBar(false);
         plugin.getLogger().info("[FoliaCleanup] region-safe 定时清理已启动，间隔 " + interval + " 秒。");
     }
 
@@ -379,17 +375,26 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
     private void tickCountdown() {
         int interval = configSupplier.get().getCleanupConfig().getIntervalSeconds();
         if (interval <= 0) {
+            countdownSeconds = 0;
+            removeBossBar();
             return;
         }
-        if (countdownSeconds <= 0) {
-            runNow();
-            countdownSeconds = interval;
-            nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
+        if (cleanupRunning.get()) {
+            countdownSeconds = 0;
+            updateCountdownBossBar(true);
             return;
         }
+        countdownSeconds = Math.max(0, countdownSeconds - 1);
+        if (countdownSeconds == 0) {
+            if (startNow()) {
+                updateCountdownBossBar(true);
+            } else {
+                resetCountdown();
+            }
+            return;
+        }
+        updateCountdownBossBar(false);
         sendNotify(countdownSeconds, CleanupFeature.CleanupStats.empty());
-        countdownSeconds--;
-        nextRunAtMillis = System.currentTimeMillis() + countdownSeconds * 1000L;
     }
 
     /** 为所有未忽略世界的已加载 chunk 安排 region 任务。 */
@@ -1262,56 +1267,62 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
 
     /** 在全局区域完成清理统计、通知和状态释放。 */
     private void finishCleanupOnGlobalRegion(CleanupFeature.CleanupStats stats, CompletionTracker tracker, boolean timedOut) {
-        if (stats.isGuardSkipped()) {
+        try {
+            if (stats.isGuardSkipped()) {
+                lastStats = stats;
+                plugin.getLogger().info("[FoliaCleanup] skippedByGuard=true"
+                        + ", guardReason=" + stats.getGuardSkipReason()
+                        + ", onlinePlayers=" + stats.getGuardOnlinePlayers()
+                        + ", minOnlinePlayers=" + stats.getGuardMinOnlinePlayers()
+                        + ", targetEntities=" + stats.getGuardTargetEntities()
+                        + ", minTotalEntities=" + stats.getGuardMinTotalEntities()
+                        + ", worlds=" + stats.getWorlds()
+                        + ", timedOut=" + timedOut);
+                sendNotify(-5, stats);
+                return;
+            }
+            if (tracker != null) {
+                tracker.finishAudit(timedOut);
+            }
+            sendPersonalTrashBatchNotify(stats);
             lastStats = stats;
-            cleanupRunning.set(false);
-            plugin.getLogger().info("[FoliaCleanup] skippedByGuard=true"
+            long elapsedMs = tracker == null ? -1L : tracker.elapsedMillis();
+            plugin.getLogger().info("[FoliaCleanup] worlds=" + stats.getWorlds()
+                    + ", skippedByGuard=" + stats.isGuardSkipped()
                     + ", guardReason=" + stats.getGuardSkipReason()
                     + ", onlinePlayers=" + stats.getGuardOnlinePlayers()
                     + ", minOnlinePlayers=" + stats.getGuardMinOnlinePlayers()
                     + ", targetEntities=" + stats.getGuardTargetEntities()
                     + ", minTotalEntities=" + stats.getGuardMinTotalEntities()
-                    + ", worlds=" + stats.getWorlds()
-                    + ", timedOut=" + timedOut);
-            sendNotify(-5, stats);
-            return;
+                    + ", itemEntitiesHandled=" + stats.getItemEntitiesHandled()
+                    + ", itemEntitiesToGlobalTrash=" + stats.getItemEntitiesToGlobalTrash()
+                    + ", itemsRouted=" + stats.getItemsRouted()
+                    + ", itemsRemoved=" + stats.getItemsRemoved()
+                    + ", itemsSkipped=" + stats.getItemsSkipped()
+                    + ", entitiesRemoved=" + stats.getEntitiesRemoved()
+                    + ", entitiesSkipped=" + stats.getEntitiesSkipped()
+                    + ", chunksSeen=" + trackerValue(tracker, TrackerMetric.CHUNKS_SEEN)
+                    + ", chunksScheduled=" + trackerValue(tracker, TrackerMetric.CHUNKS_SCHEDULED)
+                    + ", chunksDone=" + trackerValue(tracker, TrackerMetric.CHUNKS_DONE)
+                    + ", chunksSkippedByLimit=" + trackerValue(tracker, TrackerMetric.CHUNKS_SKIPPED_BY_LIMIT)
+                    + ", chunksDispatchFailed=" + trackerValue(tracker, TrackerMetric.CHUNKS_DISPATCH_FAILED)
+                    + ", pendingTasks=" + trackerValue(tracker, TrackerMetric.PENDING_TASKS)
+                    + ", timeoutSeconds=" + (tracker == null ? -1 : tracker.timeoutSeconds())
+                    + ", timedOut=" + timedOut
+                    + ", elapsedMs=" + elapsedMs
+                    + ", clearEvery=" + currentClearEveryCleanups()
+                    + ", worldTrashSkippedUnloadedChunks=" + trashRouter.getSkippedUnloadedChunkAccesses()
+                    + ", globalTrashRefreshed=" + stats.isGlobalTrashRefreshed());
+            logConsoleCleanupDetails(stats, timedOut);
+            sendNotify(timedOut ? -4 : 0, stats);
+            sendNotify(globalTrashStatusNotifyCount(stats), stats);
+        } finally {
+            try {
+                resetCountdown();
+            } finally {
+                cleanupRunning.set(false);
+            }
         }
-        if (tracker != null) {
-            tracker.finishAudit(timedOut);
-        }
-        sendPersonalTrashBatchNotify(stats);
-        lastStats = stats;
-        cleanupRunning.set(false);
-        long elapsedMs = tracker == null ? -1L : tracker.elapsedMillis();
-        plugin.getLogger().info("[FoliaCleanup] worlds=" + stats.getWorlds()
-                + ", skippedByGuard=" + stats.isGuardSkipped()
-                + ", guardReason=" + stats.getGuardSkipReason()
-                + ", onlinePlayers=" + stats.getGuardOnlinePlayers()
-                + ", minOnlinePlayers=" + stats.getGuardMinOnlinePlayers()
-                + ", targetEntities=" + stats.getGuardTargetEntities()
-                + ", minTotalEntities=" + stats.getGuardMinTotalEntities()
-                + ", itemEntitiesHandled=" + stats.getItemEntitiesHandled()
-                + ", itemEntitiesToGlobalTrash=" + stats.getItemEntitiesToGlobalTrash()
-                + ", itemsRouted=" + stats.getItemsRouted()
-                + ", itemsRemoved=" + stats.getItemsRemoved()
-                + ", itemsSkipped=" + stats.getItemsSkipped()
-                + ", entitiesRemoved=" + stats.getEntitiesRemoved()
-                + ", entitiesSkipped=" + stats.getEntitiesSkipped()
-                + ", chunksSeen=" + trackerValue(tracker, TrackerMetric.CHUNKS_SEEN)
-                + ", chunksScheduled=" + trackerValue(tracker, TrackerMetric.CHUNKS_SCHEDULED)
-                + ", chunksDone=" + trackerValue(tracker, TrackerMetric.CHUNKS_DONE)
-                + ", chunksSkippedByLimit=" + trackerValue(tracker, TrackerMetric.CHUNKS_SKIPPED_BY_LIMIT)
-                + ", chunksDispatchFailed=" + trackerValue(tracker, TrackerMetric.CHUNKS_DISPATCH_FAILED)
-                + ", pendingTasks=" + trackerValue(tracker, TrackerMetric.PENDING_TASKS)
-                + ", timeoutSeconds=" + (tracker == null ? -1 : tracker.timeoutSeconds())
-                + ", timedOut=" + timedOut
-                + ", elapsedMs=" + elapsedMs
-                + ", clearEvery=" + currentClearEveryCleanups()
-                + ", worldTrashSkippedUnloadedChunks=" + trashRouter.getSkippedUnloadedChunkAccesses()
-                + ", globalTrashRefreshed=" + stats.isGlobalTrashRefreshed());
-        logConsoleCleanupDetails(stats, timedOut);
-        sendNotify(timedOut ? -4 : 0, stats);
-        sendNotify(globalTrashStatusNotifyCount(stats), stats);
     }
 
     /** 返回跟踪器计数，未启用跟踪器时返回 -1。 */
@@ -1370,7 +1381,6 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
         sendChatNotify(notifyConfig, count, stats);
         sendConsoleNotify(notifyConfig, count, stats);
         sendActionBarNotify(notifyConfig, count, stats);
-        sendBossBarNotify(notifyConfig, count, stats);
         sendTitleNotify(notifyConfig, count, stats);
         sendSoundNotify(notifyConfig, count);
         runCommandNotify(notifyConfig, count, stats);
@@ -1461,38 +1471,33 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
         });
     }
 
-    /** 发送 BossBar 通知。 */
-    private void sendBossBarNotify(NotifyConfig notifyConfig, int count, CleanupFeature.CleanupStats stats) {
-        if (!notifyConfig.isBossBarEnabled()) {
-            cancelBossBarRemoval();
+    /** 每秒用真实清理计时器刷新常驻 BossBar。 */
+    private void updateCountdownBossBar(boolean cleaning) {
+        ConfigBundle bundle = configSupplier.get();
+        int interval = bundle.getCleanupConfig().getIntervalSeconds();
+        if (taskHandle == null || interval <= 0 || !bundle.getNotifyConfig().isBossBarEnabled()) {
             removeBossBar();
             return;
         }
-        NotifyConfig.BossBarMessage message = notifyConfig.getBossBarMessages().get(count);
-        if (message == null) {
-            if (count <= 0) {
-                scheduleBossBarRemoval();
-            }
-            return;
-        }
         final BossBar current = bossBar();
-        current.setTitle(RichTextRenderer.color(applyStats(message.getText(), stats)));
-        current.setStyle(parseBossBarStyle(message.getStyle()));
-        current.setColor(parseBossBarColor(message.getColor()));
-        current.setProgress(bossBarProgress(count, notifyConfig));
-        bossBarPreferences().activate(current);
+        BossBarPreferenceService preferences = bossBarPreferences();
+        synchronized (preferences) {
+            CountdownBossBarRenderer.update(current, bundle.getNotifyConfig(), countdownSeconds, interval, cleaning);
+            preferences.activate(current);
+        }
         forEachOnlinePlayer(new PlayerAction() {
-            /** 在玩家实体上下文加入 BossBar。 */
             @Override
             public void run(Player player) {
                 bossBarPreferences().refreshPlayer(current, player);
             }
         });
-        if (count <= 0) {
-            scheduleBossBarRemoval();
-            return;
-        }
-        cancelBossBarRemoval();
+    }
+
+    /** 本轮清理结束（含门禁跳过）后开始下一轮完整周期。 */
+    private void resetCountdown() {
+        countdownSeconds = taskHandle == null ? 0
+                : Math.max(0, configSupplier.get().getCleanupConfig().getIntervalSeconds());
+        updateCountdownBossBar(false);
     }
 
     /** 发送 Title 通知。 */
@@ -1579,64 +1584,6 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
         return bossBar;
     }
 
-    /** 计算 BossBar 进度。 */
-    private double bossBarProgress(int count, NotifyConfig notifyConfig) {
-        int max = 0;
-        for (Integer key : notifyConfig.getBossBarMessages().keySet()) {
-            if (key != null && key > max) {
-                max = key;
-            }
-        }
-        if (count <= 0 || max <= 0) {
-            return 1D;
-        }
-        return Math.max(0D, Math.min(1D, count / (double) max));
-    }
-
-    /** 解析 BossBar 颜色，配置错误时使用绿色。 */
-    private BarColor parseBossBarColor(String value) {
-        try {
-            return BarColor.valueOf((value == null ? "" : value.trim()).toUpperCase(Locale.ROOT));
-        } catch (RuntimeException ignored) {
-            return BarColor.GREEN;
-        }
-    }
-
-    /** 解析 BossBar 样式，配置错误时使用实心样式。 */
-    private BarStyle parseBossBarStyle(String value) {
-        try {
-            return BarStyle.valueOf((value == null ? "" : value.trim()).toUpperCase(Locale.ROOT));
-        } catch (RuntimeException ignored) {
-            return BarStyle.SOLID;
-        }
-    }
-
-    /** 延迟移除完成后的 BossBar。 */
-    private void scheduleBossBarRemoval() {
-        cancelBossBarRemoval();
-        try {
-            bossBarRemoveTask = platform.scheduler().runLater(new Runnable() {
-                /** 执行 BossBar 延迟移除。 */
-                @Override
-                public void run() {
-                    removeBossBar();
-                    bossBarRemoveTask = null;
-                }
-            }, 90L);
-        } catch (RuntimeException exception) {
-            plugin.getLogger().warning("[FoliaCleanup] 分派 BossBar 移除失败: " + exception.getMessage());
-            bossBarRemoveTask = null;
-        }
-    }
-
-    /** 取消等待中的 BossBar 移除任务。 */
-    private void cancelBossBarRemoval() {
-        if (bossBarRemoveTask != null) {
-            bossBarRemoveTask.cancel();
-            bossBarRemoveTask = null;
-        }
-    }
-
     /** 从所有玩家屏幕移除 BossBar。 */
     private void removeBossBar() {
         if (bossBarPreferences != null) {
@@ -1646,6 +1593,7 @@ public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Li
             return;
         }
         final BossBar current = bossBar;
+        bossBar = null;
         forEachOnlinePlayer(new PlayerAction() {
             /** 在玩家实体上下文移除 BossBar。 */
             @Override

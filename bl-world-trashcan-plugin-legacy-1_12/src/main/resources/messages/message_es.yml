@@ -177,7 +177,7 @@ world-trash:
   remove-success: "{prefix}&#5AC8FARegistro de papelera de mundo eliminado."
 # 主命令相关消息。
 command:
-  bossbar-enabled: "{prefix}&aTu BossBar de cuenta atrás está activada (se muestra durante los avisos configurados)."
+  bossbar-countdown-enabled: "{prefix}&aTu BossBar permanente de cuenta atrás está activada."
   bossbar-disabled: "{prefix}&eTu BossBar de cuenta atrás está desactivada."
   bossbar-global-disabled: "{prefix}&eEl servidor ha desactivado la BossBar. Tu preferencia se conserva y se aplicará cuando vuelva a activarse."
   bossbar-save-failed: "{prefix}&cNo se pudo guardar tu preferencia de BossBar; la anterior no ha cambiado. Pide al administrador que revise los permisos del directorio de datos."

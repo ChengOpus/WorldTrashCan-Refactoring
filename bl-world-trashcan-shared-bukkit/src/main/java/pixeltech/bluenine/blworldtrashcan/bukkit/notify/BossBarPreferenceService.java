@@ -126,7 +126,7 @@ public final class BossBarPreferenceService implements Listener {
         }
     }
 
-    /** 只在确实发出通知时激活，避免 on 指令复活已经结束的倒计时。 */
+    /** 仅在定时清理启用时激活，on 指令立即加入当前常驻倒计时。 */
     public synchronized void activate(BossBar bar) {
         activeBar = bar;
     }

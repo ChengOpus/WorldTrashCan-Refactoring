@@ -177,7 +177,7 @@ world-trash:
   remove-success: "{prefix}&#5AC8FA已移除該世界垃圾桶登記。"
 # 主指令相關訊息。
 command:
-  bossbar-enabled: "{prefix}&a你的清理倒數 BossBar 已開啟（在設定的提醒時段顯示）。"
+  bossbar-countdown-enabled: "{prefix}&a你的常駐清理倒數 BossBar 已開啟。"
   bossbar-disabled: "{prefix}&e你的清理倒數 BossBar 已關閉。"
   bossbar-global-disabled: "{prefix}&e伺服器已關閉 BossBar 總開關；你的個人偏好會保留，總開關開啟後生效。"
   bossbar-save-failed: "{prefix}&c儲存 BossBar 設定失敗，原設定未更改，請聯絡管理員檢查資料目錄權限。"

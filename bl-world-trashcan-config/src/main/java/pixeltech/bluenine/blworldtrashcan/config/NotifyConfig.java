@@ -14,6 +14,8 @@ public final class NotifyConfig {
     private final Map<Integer, String> actionBarMessages;
     private final boolean bossBarEnabled;
     private final boolean bossBarDefaultEnabled;
+    private final String bossBarCountdownTitle;
+    private final String bossBarCleaningTitle;
     private final Map<Integer, BossBarMessage> bossBarMessages;
     private final boolean commandEnabled;
     private final Map<Integer, List<String>> commandMessages;
@@ -45,6 +47,22 @@ public final class NotifyConfig {
                         Map<Integer, List<String>> commandMessages, boolean titleEnabled,
                         Map<Integer, TitleMessage> titleMessages, boolean soundEnabled,
                         Map<Integer, SoundMessage> soundMessages, boolean bossBarDefaultEnabled) {
+        this(chatEnabled, chatClickCommand, chatMessages, console, actionBarEnabled, actionBarMessages,
+                bossBarEnabled, bossBarMessages, commandEnabled, commandMessages, titleEnabled,
+                titleMessages, soundEnabled, soundMessages, bossBarDefaultEnabled,
+                "&b距离下次清理还有 &e{time}", "&e正在清理物品和实体……");
+    }
+
+    /** 创建包含常驻倒计时标题的通知配置。 */
+    public NotifyConfig(boolean chatEnabled, String chatClickCommand,
+                        Map<Integer, String> chatMessages, ConsoleConfig console,
+                        boolean actionBarEnabled,
+                        Map<Integer, String> actionBarMessages, boolean bossBarEnabled,
+                        Map<Integer, BossBarMessage> bossBarMessages, boolean commandEnabled,
+                        Map<Integer, List<String>> commandMessages, boolean titleEnabled,
+                        Map<Integer, TitleMessage> titleMessages, boolean soundEnabled,
+                        Map<Integer, SoundMessage> soundMessages, boolean bossBarDefaultEnabled,
+                        String bossBarCountdownTitle, String bossBarCleaningTitle) {
         this.chatEnabled = chatEnabled;
         this.chatClickCommand = chatClickCommand == null ? "" : chatClickCommand;
         this.chatMessages = safeMap(chatMessages);
@@ -53,6 +71,8 @@ public final class NotifyConfig {
         this.actionBarMessages = safeMap(actionBarMessages);
         this.bossBarEnabled = bossBarEnabled;
         this.bossBarDefaultEnabled = bossBarDefaultEnabled;
+        this.bossBarCountdownTitle = bossBarCountdownTitle == null ? "&b距离下次清理还有 &e{time}" : bossBarCountdownTitle;
+        this.bossBarCleaningTitle = bossBarCleaningTitle == null ? "&e正在清理物品和实体……" : bossBarCleaningTitle;
         this.bossBarMessages = safeMap(bossBarMessages);
         this.commandEnabled = commandEnabled;
         this.commandMessages = safeMap(commandMessages);
@@ -100,6 +120,14 @@ public final class NotifyConfig {
     /** 返回尚未设置个人偏好的玩家是否默认显示 BossBar。 */
     public boolean isBossBarDefaultEnabled() {
         return bossBarDefaultEnabled;
+    }
+
+    public String getBossBarCountdownTitle() {
+        return bossBarCountdownTitle;
+    }
+
+    public String getBossBarCleaningTitle() {
+        return bossBarCleaningTitle;
     }
 
     /** 返回 BossBar 通知映射。 */

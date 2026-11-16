@@ -41,7 +41,7 @@ public final class BossBarCommand {
             }
         }
         sender.sendMessage(enabled
-                ? messages.text("command.bossbar-enabled", "{prefix}&a你的清理倒计时 BossBar 已开启（在配置的提醒时段显示）。")
+                ? messages.text("command.bossbar-countdown-enabled", "{prefix}&a你的常驻清理倒计时 BossBar 已开启。")
                 : messages.text("command.bossbar-disabled", "{prefix}&e你的清理倒计时 BossBar 已关闭。"));
         if (!preferences.isGloballyEnabled()) {
             sender.sendMessage(messages.text("command.bossbar-global-disabled", "{prefix}&e服务器已关闭 BossBar 总开关；你的个人偏好会保留，总开关开启后生效。"));

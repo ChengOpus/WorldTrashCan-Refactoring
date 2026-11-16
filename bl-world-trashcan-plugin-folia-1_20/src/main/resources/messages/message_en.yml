@@ -177,7 +177,7 @@ world-trash:
   remove-success: "{prefix}&#5AC8FARemoved this world trash can registration."
 # 主命令相关消息。
 command:
-  bossbar-enabled: "{prefix}&aYour cleanup countdown BossBar is enabled (shown during configured notifications)."
+  bossbar-countdown-enabled: "{prefix}&aYour persistent cleanup countdown BossBar is enabled."
   bossbar-disabled: "{prefix}&eYour cleanup countdown BossBar is disabled."
   bossbar-global-disabled: "{prefix}&eThe server BossBar switch is off. Your preference is retained and will apply when it is enabled."
   bossbar-save-failed: "{prefix}&cCould not save your BossBar preference; your previous setting is unchanged. Ask an administrator to check data directory permissions."
