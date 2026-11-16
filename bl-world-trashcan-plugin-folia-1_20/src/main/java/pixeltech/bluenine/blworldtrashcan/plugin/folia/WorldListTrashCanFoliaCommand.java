@@ -8,6 +8,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import pixeltech.bluenine.blworldtrashcan.bukkit.command.BossBarCommand;
 import pixeltech.bluenine.blworldtrashcan.bukkit.SafeMaterialMatcher;
 import pixeltech.bluenine.blworldtrashcan.bukkit.api.DefaultWorldListTrashCanCommandRegistry;
 import pixeltech.bluenine.blworldtrashcan.bukkit.command.AddonCommandDispatcher;
@@ -112,6 +113,9 @@ public final class WorldListTrashCanFoliaCommand implements CommandExecutor, Tab
             sendStats(sender);
             return true;
         }
+        if ("bossbar".equals(sub)) {
+            return BossBarCommand.execute(sender, args, plugin.bossBarPreferences(), plugin.messages());
+        }
         if ("dropmode".equals(sub)) {
             handleDropMode(sender);
             return true;
@@ -203,6 +207,12 @@ public final class WorldListTrashCanFoliaCommand implements CommandExecutor, Tab
             return addonCommands.completeFirstLevel(sender,
                     prefix.startsWith("debug") ? SUB_COMMANDS : REGULAR_SUB_COMMANDS, args[0]);
         }
+        if (args.length >= 2 && "bossbar".equalsIgnoreCase(args[0])) {
+            return args.length == 2 && sender instanceof Player
+                    && (sender.isOp() || sender.hasPermission("WorldListTrashCan.BossBar"))
+                    ? filter(Arrays.asList("on", "off", "toggle", "status"), args[1])
+                    : Collections.<String>emptyList();
+        }
         if (args.length == 2 && "clear".equalsIgnoreCase(args[0])) {
             return filter(ClearCommandOptions.booleanValues(), args[1]);
         }
@@ -252,6 +262,7 @@ public final class WorldListTrashCanFoliaCommand implements CommandExecutor, Tab
                 "&b/wtc clear [true/false] &7- 立即扫地，默认 true 忽略 guards，false 遵守 guards",
                 "&b/wtc global &7- 打开公共垃圾桶",
                 "&b/wtc personal &7- 打开个人垃圾桶",
+                "&b/wtc bossbar [on|off|toggle|status] &7- 设置个人倒计时显示",
                 "&b/wtc dropmode &7- 切换防丢弃模式",
                 "&b/wtc look &7- 查询手持物品和右键实体类型",
                 "&b/wtc ban &7- 打开当前世界垃圾桶物品黑名单",

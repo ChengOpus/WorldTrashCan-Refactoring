@@ -27,11 +27,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
+import pixeltech.bluenine.blworldtrashcan.bukkit.notify.BossBarPreferenceService;
+import pixeltech.bluenine.blworldtrashcan.bukkit.feature.PlayerBossBarFeature;
 import pixeltech.bluenine.blworldtrashcan.bukkit.feature.CleanupConsoleDetailFormatter;
 import pixeltech.bluenine.blworldtrashcan.bukkit.api.DefaultWorldListTrashCanAuditBridge;
 import pixeltech.bluenine.blworldtrashcan.bukkit.feature.CleanupFeature;
 import pixeltech.bluenine.blworldtrashcan.bukkit.feature.CleanupItemProtection;
-import pixeltech.bluenine.blworldtrashcan.bukkit.feature.Feature;
 import pixeltech.bluenine.blworldtrashcan.bukkit.message.RichTextRenderer;
 import pixeltech.bluenine.blworldtrashcan.bukkit.logging.DebugOutput;
 import pixeltech.bluenine.blworldtrashcan.bukkit.platform.ServerPlatform;
@@ -60,6 +61,7 @@ import pixeltech.bluenine.blworldtrashcan.core.trash.TrashRoute;
 import pixeltech.bluenine.blworldtrashcan.core.trash.TrashRoutingDecision;
 import pixeltech.bluenine.blworldtrashcan.storage.TrashLocation;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -79,7 +81,7 @@ import pixeltech.worldlisttrashcan.api.audit.CleanupRunContext;
 import pixeltech.worldlisttrashcan.api.audit.CleanupTrigger;
 
 /** Folia 专用 region-safe 清理实现。 */
-public final class FoliaRegionCleanupFeature implements Feature, Listener {
+public final class FoliaRegionCleanupFeature implements PlayerBossBarFeature, Listener {
     private static final String WORLD_TRASH_TRANSFER_METADATA = "worldlisttrashcan_world_trash_transfer";
     private final Plugin plugin;
     private final ServerPlatform platform;
@@ -98,6 +100,7 @@ public final class FoliaRegionCleanupFeature implements Feature, Listener {
     private TaskHandle taskHandle;
     private TaskHandle bossBarRemoveTask;
     private BossBar bossBar;
+    private BossBarPreferenceService bossBarPreferences;
     private volatile CleanupFeature.CleanupStats lastStats = CleanupFeature.CleanupStats.empty();
     private long nextRunAtMillis;
     private int countdownSeconds;
@@ -130,6 +133,17 @@ public final class FoliaRegionCleanupFeature implements Feature, Listener {
         this.itemQuantityService = itemQuantityService;
     }
 
+    /** 延迟加载以兼容未启用清理任务的调用方。 */
+    @Override
+    public synchronized BossBarPreferenceService bossBarPreferences() {
+        if (bossBarPreferences == null) {
+            bossBarPreferences = new BossBarPreferenceService(
+                    new File(plugin.getDataFolder(), "data/bossbar-preferences.yml"),
+                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled());
+        }
+        return bossBarPreferences;
+    }
+
     /** 返回功能 ID。 */
     @Override
     public String id() {
@@ -139,6 +153,7 @@ public final class FoliaRegionCleanupFeature implements Feature, Listener {
     /** 启动 Folia 倒计时清理任务。 */
     @Override
     public void enable() {
+        bossBarPreferences().register(plugin);
         if (!listenerRegistered) {
             plugin.getServer().getPluginManager().registerEvents(this, plugin);
             listenerRegistered = true;
@@ -1464,11 +1479,12 @@ public final class FoliaRegionCleanupFeature implements Feature, Listener {
         current.setStyle(parseBossBarStyle(message.getStyle()));
         current.setColor(parseBossBarColor(message.getColor()));
         current.setProgress(bossBarProgress(count, notifyConfig));
+        bossBarPreferences().activate(current);
         forEachOnlinePlayer(new PlayerAction() {
             /** 在玩家实体上下文加入 BossBar。 */
             @Override
             public void run(Player player) {
-                current.addPlayer(player);
+                bossBarPreferences().refreshPlayer(current, player);
             }
         });
         if (count <= 0) {
@@ -1622,6 +1638,9 @@ public final class FoliaRegionCleanupFeature implements Feature, Listener {
 
     /** 从所有玩家屏幕移除 BossBar。 */
     private void removeBossBar() {
+        if (bossBarPreferences != null) {
+            bossBarPreferences.deactivate();
+        }
         if (bossBar == null) {
             return;
         }

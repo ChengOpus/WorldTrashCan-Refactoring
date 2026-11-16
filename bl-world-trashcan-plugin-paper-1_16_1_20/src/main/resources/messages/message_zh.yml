@@ -180,6 +180,11 @@ world-trash:
   remove-success: "{prefix}&#5AC8FA已移除该世界垃圾桶登记。"
 # 主命令相关消息。
 command:
+  bossbar-enabled: "{prefix}&a你的清理倒计时 BossBar 已开启（在配置的提醒时段显示）。"
+  bossbar-disabled: "{prefix}&e你的清理倒计时 BossBar 已关闭。"
+  bossbar-global-disabled: "{prefix}&e服务器已关闭 BossBar 总开关；你的个人偏好会保留，总开关开启后生效。"
+  bossbar-save-failed: "{prefix}&c保存 BossBar 设置失败，原设置未更改，请联系管理员检查数据目录权限。"
+  bossbar-usage: "{prefix}&e用法: /wtc bossbar [on|off|toggle|status]"
   # 通用无权限提示。
   no-permission: "{prefix}&#FFD166权限不足 &#64748B| &#C9D4E2你没有权限执行该命令。"
   addon-failed: "{prefix}&#FF6B6B附属插件命令执行失败 &#64748B| &#C9D4E2请查看后台日志。"
@@ -207,6 +212,7 @@ command:
     - "&#5AC8FA/wtc clear [true/false] &#64748B- &#C9D4E2立即扫地，默认 true 忽略 guards，false 遵守 guards"
     - "&#5AC8FA/wtc global &#64748B- &#C9D4E2打开公共垃圾桶"
     - "&#5AC8FA/wtc personal &#64748B- &#C9D4E2打开个人垃圾桶"
+    - "&#5AC8FA/wtc bossbar [on|off|toggle|status] &#64748B- 设置个人倒计时显示"
     - "&#5AC8FA/wtc dropmode &#64748B- &#C9D4E2切换防丢弃模式"
     - "&#5AC8FA/wtc look &#64748B- &#C9D4E2查询手持物品和右键实体类型"
     - "&#5AC8FA/wtc ban &#64748B- &#C9D4E2打开当前世界垃圾桶物品黑名单"

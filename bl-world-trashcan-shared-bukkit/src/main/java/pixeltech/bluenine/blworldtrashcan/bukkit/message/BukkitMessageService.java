@@ -171,9 +171,9 @@ public final class BukkitMessageService {
         return value;
     }
 
-    /** 修正旧默认语言文件中把调试命令直接放进主帮助面板的问题。 */
+    /** 兼容旧帮助列表，并在保留自定义内容的同时补充个人 BossBar 入口。 */
     private List<String> normalizeList(String key, List<String> raw) {
-        if (!"command.help".equals(key) || !containsLegacyDebugHelp(raw)) {
+        if (!"command.help".equals(key)) {
             return raw;
         }
         List<String> bundled = bundledDefaultMessages.getStringList(key);
@@ -183,7 +183,22 @@ public final class BukkitMessageService {
                 bundled = activeBundled;
             }
         }
-        return bundled.isEmpty() ? raw : bundled;
+        if (containsLegacyDebugHelp(raw)) {
+            return bundled.isEmpty() ? raw : bundled;
+        }
+        for (String line : raw) {
+            if (line.contains("/wtc bossbar")) {
+                return raw;
+            }
+        }
+        for (String line : bundled) {
+            if (line.contains("/wtc bossbar")) {
+                List<String> updated = new ArrayList<>(raw);
+                updated.add(line);
+                return updated;
+            }
+        }
+        return raw;
     }
 
     /** 判断 help 列表是否仍是旧版调试命令堆叠写法。 */
