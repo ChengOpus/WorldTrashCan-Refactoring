@@ -177,6 +177,11 @@ world-trash:
   remove-success: "{prefix}&#5AC8FA已移除該世界垃圾桶登記。"
 # 主指令相關訊息。
 command:
+  bossbar-enabled: "{prefix}&a你的清理倒數 BossBar 已開啟（在設定的提醒時段顯示）。"
+  bossbar-disabled: "{prefix}&e你的清理倒數 BossBar 已關閉。"
+  bossbar-global-disabled: "{prefix}&e伺服器已關閉 BossBar 總開關；你的個人偏好會保留，總開關開啟後生效。"
+  bossbar-save-failed: "{prefix}&c儲存 BossBar 設定失敗，原設定未更改，請聯絡管理員檢查資料目錄權限。"
+  bossbar-usage: "{prefix}&e用法: /wtc bossbar [on|off|toggle|status]"
   # 通用無權限提示。
   no-permission: "{prefix}&#FFD166你沒有權限執行該指令。"
   addon-failed: "{prefix}&#FF6B6B附屬插件指令執行失敗 &#64748B| &#C9D4E2請查看後台日誌。"
@@ -203,6 +208,7 @@ command:
     - "&#5AC8FA/wtc clear [true/false] &#64748B- 立即掃地，預設 true 忽略 guards，false 遵守 guards"
     - "&#5AC8FA/wtc global &#64748B- 打開公共垃圾桶"
     - "&#5AC8FA/wtc personal &#64748B- 打開個人垃圾桶"
+    - "&#5AC8FA/wtc bossbar [on|off|toggle|status] &#64748B- 設定個人倒數顯示"
     - "&#5AC8FA/wtc dropmode &#64748B- 切換防丟棄模式"
     - "&#5AC8FA/wtc look &#64748B- 查詢手持物品和右鍵實體類型"
     - "&#5AC8FA/wtc ban &#64748B- 打開目前世界垃圾桶物品黑名單"

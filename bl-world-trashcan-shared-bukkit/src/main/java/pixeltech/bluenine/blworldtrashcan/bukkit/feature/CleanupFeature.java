@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
+import pixeltech.bluenine.blworldtrashcan.bukkit.notify.BossBarPreferenceService;
 import pixeltech.bluenine.blworldtrashcan.bukkit.message.RichTextRenderer;
 import pixeltech.bluenine.blworldtrashcan.bukkit.api.DefaultWorldListTrashCanAuditBridge;
 import pixeltech.bluenine.blworldtrashcan.bukkit.platform.ServerPlatform;
@@ -38,6 +39,7 @@ import pixeltech.bluenine.blworldtrashcan.core.model.ItemSnapshot;
 import pixeltech.bluenine.blworldtrashcan.core.trash.TrashRoute;
 import pixeltech.bluenine.blworldtrashcan.core.trash.TrashRoutingDecision;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -54,7 +56,7 @@ import pixeltech.worldlisttrashcan.api.audit.CleanupRunContext;
 import pixeltech.worldlisttrashcan.api.audit.CleanupTrigger;
 
 /** 后台清理功能模块，清理决策交给 core，Bukkit 层只执行结果。 */
-public final class CleanupFeature implements Feature {
+public final class CleanupFeature implements PlayerBossBarFeature {
     public static final String GUARD_REASON_ONLINE_PLAYERS = "online-players";
     public static final String GUARD_REASON_TARGET_ENTITIES = "target-entities";
     private static final int MAX_DEFERRED_GUARD_TARGETS = 4096;
@@ -72,6 +74,7 @@ public final class CleanupFeature implements Feature {
     private TaskHandle taskHandle;
     private TaskHandle bossBarRemoveTask;
     private BossBar bossBar;
+    private BossBarPreferenceService bossBarPreferences;
     private CleanupStats lastStats = CleanupStats.empty();
     private long nextRunAtMillis;
     private int cleanupRunsSinceGlobalClear;
@@ -104,6 +107,17 @@ public final class CleanupFeature implements Feature {
         this.itemQuantityService = itemQuantityService;
     }
 
+    /** 延迟加载以兼容未启用清理任务的调用方。 */
+    @Override
+    public synchronized BossBarPreferenceService bossBarPreferences() {
+        if (bossBarPreferences == null) {
+            bossBarPreferences = new BossBarPreferenceService(
+                    new File(plugin.getDataFolder(), "data/bossbar-preferences.yml"),
+                    () -> configSupplier.get().getNotifyConfig().isBossBarEnabled());
+        }
+        return bossBarPreferences;
+    }
+
     /** 返回功能 ID。 */
     @Override
     public String id() {
@@ -113,6 +127,7 @@ public final class CleanupFeature implements Feature {
     /** 启用后台清理任务。 */
     @Override
     public void enable() {
+        bossBarPreferences().register(plugin);
         startTask();
     }
 
@@ -856,10 +871,9 @@ public final class CleanupFeature implements Feature {
         current.setStyle(parseBossBarStyle(message.getStyle()));
         current.setColor(parseBossBarColor(message.getColor()));
         current.setProgress(bossBarProgress(count, notifyConfig));
+        bossBarPreferences().activate(current);
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!current.getPlayers().contains(player)) {
-                current.addPlayer(player);
-            }
+            bossBarPreferences().refreshPlayer(current, player);
         }
         if (count <= 0) {
             scheduleBossBarRemoval();
@@ -971,6 +985,9 @@ public final class CleanupFeature implements Feature {
 
     /** 从所有玩家屏幕移除 BossBar。 */
     private void removeBossBar() {
+        if (bossBarPreferences != null) {
+            bossBarPreferences.deactivate();
+        }
         if (bossBar != null) {
             bossBar.removeAll();
         }

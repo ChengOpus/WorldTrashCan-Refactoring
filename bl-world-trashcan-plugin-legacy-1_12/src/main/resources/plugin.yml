@@ -11,6 +11,9 @@ commands:
     aliases:
       - wtc
 permissions:
+  WorldListTrashCan.BossBar:
+    description: 允许设置自己的清理倒计时 BossBar 显示
+    default: true
   WorldListTrashCan.Admin:
     description: 允许重载插件并查看调试信息
     default: op

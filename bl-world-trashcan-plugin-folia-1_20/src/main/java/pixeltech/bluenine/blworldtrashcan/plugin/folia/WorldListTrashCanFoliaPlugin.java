@@ -10,6 +10,7 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import pixeltech.bluenine.blworldtrashcan.bukkit.notify.BossBarPreferenceService;
 import pixeltech.bluenine.blworldtrashcan.bukkit.bstats.BStatsMetricsService;
 import pixeltech.bluenine.blworldtrashcan.bukkit.bstats.Metrics;
 import pixeltech.bluenine.blworldtrashcan.bukkit.config.BukkitConfigurationSource;
@@ -195,6 +196,11 @@ public final class WorldListTrashCanFoliaPlugin extends JavaPlugin {
     /** 返回消息服务。 */
     public BukkitMessageService messages() {
         return messageService;
+    }
+
+    /** 返回当前平台的个人 BossBar 偏好。 */
+    public BossBarPreferenceService bossBarPreferences() {
+        return cleanupFeature.bossBarPreferences();
     }
 
     /** 返回掉落物堆叠状态。 */
